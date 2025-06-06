@@ -1,0 +1,6 @@
+# Ignorar el archivo de entorno que contiene los secretos reales.
+.env
+
+# Ignorar el directorio de datos persistentes que Docker creará.
+# Este contendrá los workflows, credenciales cifradas, etc. de n8n.
+/data/
