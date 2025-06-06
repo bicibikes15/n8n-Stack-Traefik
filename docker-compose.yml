@@ -1,54 +1,38 @@
 # ##################################################
 # #                                                #
-# #            STACK DE N8N PARA TRAEFIK           #
+# #    STACK ESCALABLE DE N8N PARA PRODUCCIÓN      #
 # #         https://digitallfran.co                #
 # #                                                #
 # ##################################################
 
 services:
-  n8n:
+  # --- El Cerebro de n8n (Editor, Webhooks, API) ---
+  # Este contenedor solo recibe tareas y las pone en la cola.
+  n8n_main:
     ## -----------------https://digitallfran.co--------------------- ##
-    # --- Editor Principal y Webhooks de n8n ---
     image: n8nio/n8n:latest
-    # 'latest' siempre descarga la versión más nueva disponible en Docker Hub.
-    # Beneficio: Obtienes nuevas funciones automáticamente al reiniciar/redesplegar.
-    # Riesgo: Una nueva versión puede introducir cambios que rompan la compatibilidad.
-    # Para producción, se recomienda fijar una versión específica (ej. n8nio/n8n:1.45.1).
     container_name: n8n_main
     restart: unless-stopped
-
-    # --- Variables de Entorno ---
-    # Aquí se configura el comportamiento interno de n8n.
-    # Los valores (${...}) se toman del archivo .env para no exponer secretos.
+    command: start # Inicia en modo normal
     environment:
-      # Conexión a la base de datos PostgreSQL
+      - EXECUTIONS_PROCESS=main # Define su rol como 'principal'
       - DB_TYPE=postgresdb
       - DB_POSTGRESDB_HOST=${DB_HOST}
       - DB_POSTGRESDB_USER=${DB_USER}
       - DB_POSTGRESDB_PASSWORD=${DB_PASSWORD}
       - DB_POSTGRESDB_DATABASE=${DB_NAME}
-
-      # URLs públicas y configuración de acceso
       - N8N_HOST=${N8N_DOMAIN}
       - N8N_PROTOCOL=https
       - N8N_EDITOR_BASE_URL=https://${N8N_DOMAIN}/
       - WEBHOOK_URL=https://${N8N_WEBHOOK_DOMAIN}/
-
-      # Clave para encriptar credenciales guardadas dentro de n8n
       - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
-
-      # Configuración general y de zona horaria
       - NODE_ENV=production
       - GENERIC_TIMEZONE=${TZ}
       - TZ=${TZ}
-
-      # Configuración de la cola de tareas con Redis para mejor rendimiento
       - EXECUTIONS_MODE=queue
       - QUEUE_BULL_REDIS_HOST=${QUEUE_HOST}
       - QUEUE_BULL_REDIS_PORT=${QUEUE_PORT}
       - QUEUE_BULL_REDIS_DB=${QUEUE_DB}
-
-      # Configuración para permitir que n8n envíe correos
       - N8N_EMAIL_MODE=smtp
       - N8N_SMTP_HOST=${SMTP_HOST}
       - N8N_SMTP_PORT=${SMTP_PORT}
@@ -56,48 +40,54 @@ services:
       - N8N_SMTP_PASS=${SMTP_PASS}
       - N8N_SMTP_SENDER=${SMTP_SENDER}
       - N8N_SMTP_SSL=${SMTP_SSL}
-
-      # Variables de rendimiento recomendadas por n8n
-      - N8N_RUNNERS_ENABLED=true
-      - OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS=true
-      - N8N_WORKER_CONCURRENCY=5
-      - N8N_ENVIRONMENT=production
-
-    # --- Volúmenes ---
-    # Define dónde se guardarán los datos de n8n (workflows, credenciales)
-    # para que no se pierdan si el contenedor se reinicia o actualiza.
     volumes:
       - n8n_data:/home/node/.n8n
-
-    # --- Redes ---
-    # Conecta a n8n a la red compartida para que Traefik pueda encontrarlo y gestionarlo.
     networks:
       - digitallfran_net
-
-    # --- Etiquetas para Traefik ---
-    # Estas son las instrucciones para que el proxy inverso Traefik
-    # sepa cómo exponer n8n al mundo exterior de forma segura con SSL.
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=digitallfran_net"
-      # Router para el Editor de n8n
       - "traefik.http.routers.n8n-editor.rule=Host(`${N8N_DOMAIN}`)"
       - "traefik.http.routers.n8n-editor.entrypoints=websecure"
       - "traefik.http.routers.n8n-editor.tls.certresolver=myresolver"
-      - "traefik.http.routers.n8n-editor.service=n8n"
-      # Router para los Webhooks de n8n
+      - "traefik.http.routers.n8n-editor.service=n8n_service"
       - "traefik.http.routers.n8n-webhook.rule=Host(`${N8N_WEBHOOK_DOMAIN}`)"
       - "traefik.http.routers.n8n-webhook.entrypoints=websecure"
       - "traefik.http.routers.n8n-webhook.tls.certresolver=myresolver"
-      - "traefik.http.routers.n8n-webhook.service=n8n"
-      # Definición del servicio interno de n8n que Traefik usará
-      - "traefik.http.services.n8n.loadbalancer.server.port=5678"
+      - "traefik.http.routers.n8n-webhook.service=n8n_service"
+      - "traefik.http.services.n8n_service.loadbalancer.server.port=5678"
 
-# Declara los volúmenes para que Docker los gestione.
+  # --- Los Brazos de n8n (Workers) ---
+  # Este contenedor solo toma tareas de la cola y las ejecuta. No tiene acceso externo.
+  n8n_worker:
+    ## -----------------https://digitallfran.co--------------------- ##
+    image: n8nio/n8n:latest
+    container_name: n8n_worker
+    restart: unless-stopped
+    command: worker
+    environment:
+      - EXECUTIONS_PROCESS=worker # Define su rol como 'trabajador'
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=${DB_HOST}
+      - DB_POSTGRESDB_USER=${DB_USER}
+      - DB_POSTGRESDB_PASSWORD=${DB_PASSWORD}
+      - DB_POSTGRESDB_DATABASE=${DB_NAME}
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      - NODE_ENV=production
+      - GENERIC_TIMEZONE=${TZ}
+      - TZ=${TZ}
+      - QUEUE_BULL_REDIS_HOST=${QUEUE_HOST}
+      - QUEUE_BULL_REDIS_PORT=${QUEUE_PORT}
+      - QUEUE_BULL_REDIS_DB=${QUEUE_DB}
+      - N8N_WORKER_CONCURRENCY=10 # Puede manejar hasta 10 ejecuciones a la vez
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - digitallfran_net
+
 volumes:
   n8n_data:
 
-# Declara la red como externa, lo que significa que ya debe existir.
 networks:
   digitallfran_net:
     external: true
