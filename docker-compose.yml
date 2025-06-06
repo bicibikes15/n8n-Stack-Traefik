@@ -7,15 +7,14 @@
 
 services:
   # --- El Cerebro de n8n (Editor, Webhooks, API) ---
-  # Este contenedor solo recibe tareas y las pone en la cola.
   n8n_main:
     ## -----------------https://digitallfran.co--------------------- ##
     image: n8nio/n8n:latest
     container_name: n8n_main
     restart: unless-stopped
-    command: start # Inicia en modo normal
+    command: start
     environment:
-      - EXECUTIONS_PROCESS=main # Define su rol como 'principal'
+      - EXECUTIONS_PROCESS=main
       - DB_TYPE=postgresdb
       - DB_POSTGRESDB_HOST=${DB_HOST}
       - DB_POSTGRESDB_USER=${DB_USER}
@@ -33,6 +32,7 @@ services:
       - QUEUE_BULL_REDIS_HOST=${QUEUE_HOST}
       - QUEUE_BULL_REDIS_PORT=${QUEUE_PORT}
       - QUEUE_BULL_REDIS_DB=${QUEUE_DB}
+      - QUEUE_BULL_REDIS_PASSWORD=${REDIS_PASSWORD} # <-- LÍNEA AÑADIDA
       - N8N_EMAIL_MODE=smtp
       - N8N_SMTP_HOST=${SMTP_HOST}
       - N8N_SMTP_PORT=${SMTP_PORT}
@@ -58,7 +58,6 @@ services:
       - "traefik.http.services.n8n_service.loadbalancer.server.port=5678"
 
   # --- Los Brazos de n8n (Workers) ---
-  # Este contenedor solo toma tareas de la cola y las ejecuta. No tiene acceso externo.
   n8n_worker:
     ## -----------------https://digitallfran.co--------------------- ##
     image: n8nio/n8n:latest
@@ -66,7 +65,7 @@ services:
     restart: unless-stopped
     command: worker
     environment:
-      - EXECUTIONS_PROCESS=worker # Define su rol como 'trabajador'
+      - EXECUTIONS_PROCESS=worker
       - DB_TYPE=postgresdb
       - DB_POSTGRESDB_HOST=${DB_HOST}
       - DB_POSTGRESDB_USER=${DB_USER}
@@ -79,7 +78,8 @@ services:
       - QUEUE_BULL_REDIS_HOST=${QUEUE_HOST}
       - QUEUE_BULL_REDIS_PORT=${QUEUE_PORT}
       - QUEUE_BULL_REDIS_DB=${QUEUE_DB}
-      - N8N_WORKER_CONCURRENCY=10 # Puede manejar hasta 10 ejecuciones a la vez
+      - QUEUE_BULL_REDIS_PASSWORD=${REDIS_PASSWORD} # <-- LÍNEA AÑADIDA
+      - N8N_WORKER_CONCURRENCY=10
     volumes:
       - n8n_data:/home/node/.n8n
     networks:

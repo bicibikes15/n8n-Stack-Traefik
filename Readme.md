@@ -8,11 +8,11 @@ Este no es un stack solitario. Es un general de élite que requiere de un ejérc
 
 #### **Prerrequisitos Indispensables:**
 
-1.  **El Guardián (Traefik):** Necesitas una instancia de Traefik funcionando como proxy inverso. Este stack está diseñado para usar:
-    * **[Stack de Traefik de DigitAllFran](https://github.com/bicibikes15/Traefik)**
+1.  **El Guardián (Traefik):** Necesitas una instancia de Traefik funcionando como proxy inverso.
+    * **Stack Recomendado:** [Stack de Traefik de DigitAllFran](https://github.com/bicibikes15/Traefik)
 
 2.  **El Arsenal (Bases de Datos):** n8n requiere PostgreSQL y Redis para operar. Este stack se conectará al:
-    * **[Stack Global de Bases de Datos de DigitAllFran](https://github.com/bicibikes15/Globals-Databases)**
+    * **Stack Global de Bases de Datos de DigitAllFran](https://github.com/bicibikes15/Globals-Databases)
 
 3.  **La Red Compartida:** Todos los stacks deben estar conectados a la misma red externa. El estandarte oficial de este ecosistema es `digitallfran_net`.
 
@@ -22,6 +22,8 @@ Este no es un stack solitario. Es un general de élite que requiere de un ejérc
     * **[Stack de Portainer de DigitAllFran](https://github.com/bicibikes15/Portainer-Stack-Traefik)**
 
 ## El Ritual de Invocación (Instalación)
+
+Sigue estos pasos en orden para desplegar tu fortaleza de automatización.
 
 **1. Clonar el Repositorio**
 ```bash
@@ -37,22 +39,33 @@ Bash
 
 docker network create digitallfran_net
 
-3. Configurar los Secretos y Dominios
+3. Preparar la Base de Datos (Paso Crucial)
+
+Para garantizar un arranque sin errores, crearemos manualmente la base de datos para n8n dentro de tu contenedor de PostgreSQL global.
+
+Ejecuta este comando en la terminal de tu servidor:
+
+Bash
+
+docker exec -it postgres_global psql -U postgres -c "CREATE DATABASE n8n_database;"
+La terminal debería devolver CREATE DATABASE, confirmando que el terreno está listo.
+
+4. Configurar los Secretos y Dominios
 
 Crea tu archivo de configuración local a partir de la plantilla.
 
 Bash
 
 cp .env.example .env
+Ahora, edita el archivo .env (nano .env) y configura todas las variables. Las más importantes son:
 
-Ahora, edita el archivo .env (nano .env) y configura todas las variables. Las más importantes son tus dominios, que deben apuntar a la IP de tu servidor Traefik:
-
-N8N_DOMAIN: El dominio para el editor, ej. n8n.tudominio.com.
-N8N_WEBHOOK_DOMAIN: El dominio para los webhooks, ej. n8nwh.tudominio.com.
+N8N_DOMAIN: El dominio para el editor, ej. n8n.tudominio.com. (Debe apuntar a la IP de tu servidor).
+N8N_WEBHOOK_DOMAIN: El dominio para los webhooks, ej. n8nwh.tudominio.com. (Debe apuntar a la misma IP).
 DB_PASSWORD: La contraseña de tu PostgreSQL global.
-N8N_ENCRYPTION_KEY: Una nueva clave segura para n8n (puedes generarla con openssl rand -hex 32).
+REDIS_PASSWORD: La contraseña de tu Redis global.
+N8N_ENCRYPTION_KEY: Una nueva clave segura para n8n (puedes generarla en Linux con openssl rand -hex 32).
 
-4. Desplegar n8n
+5. Desplegar n8n
 
 Con los prerrequisitos listos y el .env configurado, invoca el jutsu final.
 
@@ -61,6 +74,3 @@ Bash
 docker compose up -d
 Verificación
 Traefik detectará el nuevo contenedor, le asignará certificados SSL y lo hará disponible en los dominios que configuraste. Podrás acceder al editor de n8n en https:// seguido de tu N8N_DOMAIN.
-
----
-El pergamino para n8n está completo. La estrategia de tu ecosistema ahora está claramente documentada.
